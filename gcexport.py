@@ -24,6 +24,8 @@ from xml.dom.minidom import parseString
 import urllib2, cookielib, json
 from fileinput import filename
 
+import time
+import subprocess
 import argparse
 import zipfile
 
@@ -51,6 +53,9 @@ parser.add_argument('-d', '--directory', nargs='?', default=activities_directory
 parser.add_argument('-u', '--unzip',
         help="if downloading ZIP files (format: 'original'), unzip the file and removes the ZIP file",
         action="store_true")
+
+parser.add_argument('-s', '--sleep', type=float, default=0.0, 
+        help="optional sleep (pause) between requests to help avoid 404 errors when downloading many files from Garmin Connect")
 
 args = parser.parse_args()
 
@@ -308,8 +313,11 @@ while total_downloaded < total_to_download:
                                 remove(data_filename)
                         print 'Done.'
                 else:
-                        # TODO: Consider validating other formats.
-                        print 'Done.'
+                    # Waiting a little while between requests seems to result in
+                    # fewer 404 errors.
+                    time.sleep(args.sleep)
+                    # TODO: Consider validating other formats.
+                    print 'Done.'
         total_downloaded += num_to_download
 # End while loop for multiple chunks.
 
