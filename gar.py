@@ -17,41 +17,26 @@ import urllib.request
 import json
 
 def log_in(username, password):
+    """
 
-    #jar = cookielib.CookieJar()
-    cookieProcessor = urllib.request.HTTPCookieProcessor()
-    opener = urllib.request.build_opener(cookieProcessor)
-    jar = opener.handlers[8].cookiejar #TODO# rm magic number
-
-    # opener = urllib.request.build_opener(cookieProcessor)
+    """
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
     q = urllib.request.Request('https://sso.garmin.com/sso/login')
     r = opener.open(q, timeout=100)
     p = dict(username=username, password=password, embed='true')
+
     u = "https://sso.garmin.com/sso/login?service=https%3A%2F%2Fconnect.garmin.com%2Fmodern%2F&webhost=olaxpw-conctmodern000.garmin.com&source=https%3A%2F%2Fconnect.garmin.com%2Fen-US%2Fsignin&redirectAfterAccountLoginUrl=https%3A%2F%2Fconnect.garmin.com%2Fmodern%2F&redirectAfterAccountCreationUrl=https%3A%2F%2Fconnect.garmin.com%2Fmodern%2F&gauthHost=https%3A%2F%2Fsso.garmin.com%2Fsso&locale=en_US&id=gauth-widget&cssUrl=https%3A%2F%2Fstatic.garmincdn.com%2Fcom.garmin.connect%2Fui%2Fcss%2Fgauth-custom-v1.2-min.css&privacyStatementUrl=%2F%2Fconnect.garmin.com%2Fen-US%2Fprivacy%2F&clientId=GarminConnect&rememberMeShown=true&rememberMeChecked=false&createAccountShown=true&openCreateAccount=false&usernameShown=false&displayNameShown=false&consumeServiceTicket=false&initialFocus=true&embedWidget=false&generateExtraServiceTicket=false&globalOptInShown=true&globalOptInChecked=false&mobile=false&connectLegalTerms=true"
     #TODO# split the POST data out of the url^ so that this code is easier to read
+
     q = urllib.request.Request(url=u, data=urllib.parse.urlencode(p).encode('utf-8'))
     r = opener.open(q, timeout=100)
-    with open('/tmp/foo.html','wt') as f: f.write(r.read().decode('utf-8'))
+    # with open('/tmp/foo.html','wt') as f: f.write(r.read().decode('utf-8'))
     # At this point, the response page is different for FAILURE vs SUCCESS
     #TODO# Check the response and change the POST to see if login was successful.
 
-    #TODO# Do I even need to re-code the cookie anymore if using the same opener and cookiejar?
-    v = [cookie.value for cookie in jar if cookie.name == 'CASTGC']
-    try:
-        ticket = 'ST-0' + v[0][4:]
-    except IndexError: # there is no cookie with the name CASTGC
-        print('Could not find cookie named CASTGC')
-    except Exception as e:
-        raise e
-    p = dict(ticket='ST-0' + v[0][4:])
-    u = 'https://connect.garmin.com/post-auth/login?'
-    q = urllib.request.Request(url=u, data=urllib.parse.urlencode(p).encode('utf-8'))
-    q = urllib.request.Request(url=u + "ticket={}".format(ticket))
-#    q = urllib.request.Request(url='https://connect.garmin.com/post-auth/login')
-    print(q.full_url)
+    q = urllib.request.Request(url='https://connect.garmin.com/post-auth/login')
     r = opener.open(q, timeout=100)
     print('post-auth response code: {}'.format(r.getcode()))
-#    with open('/tmp/foo.html','wt') as f: f.write(r.read().decode('utf-8'))
 
     return opener
 
