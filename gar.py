@@ -13,7 +13,7 @@ from datetime import datetime
 from getpass import getpass
 import subprocess # to handle password managers
 from sys import argv #TODO# is this really needed
-import urllib.request
+import urllib.request, urllib.error
 import json
 
 def log_in(username, password):
@@ -52,13 +52,25 @@ def get_activity_list(opener):
     j = json.loads(r.read())
     return [entry['activity'] for entry in j['results']['activities']]
 
-def download(activity, filetype, retry=3):
+def download(opener, activity, filetype, retry=3):
     msg = 'downloading activity: {0}, {1}, ended {2}'
     print(msg.format(   activity['activityId'],
                         activity['activityName']['value'],
                         activity['endTimestamp']['display']
                     ))
+
     #TODO# actually download the TCX
+    u = 'http://connect.garmin.com/proxy/download-service/export/{filetype}/activity/{id}?full=true'
+    #post=dict(full='true')
+    q = urllib.request.Request(url=u.format(filetype=filetype, id=activity['activityId']))
+    filename = '/tmp/activity_{0}.{1}'.format(activity['activityId'],filetype)
+    try:
+        r = opener.open(q, timeout=500)
+    except urllib.error.HTTPError as e:
+        #TODO# come back and handle some of these...
+        raise e
+    with open(filename,'w') as f: f.write(r.read().decode('utf-8'))
+
 
 def set_timestamp_to_end(activity):
     print('setting activity timestamp to end')
@@ -83,11 +95,9 @@ def main(username, passcmd="", endtimestamp=False, filetype='tcx', retry=3):
         password = getpass()
 
     opener = log_in(username, password)
-#    print(opener....)
-
 
     for activity in get_activity_list(opener): #TODO# optionally limited range
-        download(activity, filetype, retry) #TODO# skip if already downloaded, check SHA
+        download(opener, activity, filetype, retry) #TODO# skip if already downloaded, check SHA
         if endtimestamp:
             set_timestamp_to_end(activity)
 
