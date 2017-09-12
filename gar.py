@@ -5,10 +5,15 @@ main docstring...
 
 to-do:
     - consider using [requests](http://docs.python-requests.org)
+
+references:
+    - 
+    - https://connect.garmin.com/proxy/activity-service-1.3/
 """
 
 import logging
 import os # mkdir, remove, utime, path.isdir, path.isfile
+import time
 from datetime import datetime
 from getpass import getpass
 import subprocess # to handle password managers
@@ -36,7 +41,6 @@ def log_in(username, password):
 
     q = urllib.request.Request(url='https://connect.garmin.com/post-auth/login')
     r = opener.open(q, timeout=100)
-    print('post-auth response code: {}'.format(r.getcode()))
 
     return opener
 
@@ -48,28 +52,52 @@ def get_activity_list(opener):
     u = 'http://connect.garmin.com/proxy/activity-search-service-1.0/json/activities?'
     p = dict(start=0, limit=3) #TODO# confirm the POST data actually does something...
     q = urllib.request.Request(url=u, data=urllib.parse.urlencode(p).encode('utf-8'))
+    # print(q.get_full_url() + q.data.decode('utf-8'))
     r = opener.open(q, timeout=100)
     j = json.loads(r.read())
     return [entry['activity'] for entry in j['results']['activities']]
 
-def download(opener, activity, filetype, retry=3):
-    msg = 'downloading activity: {0}, {1}, ended {2}'
+def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
+    #TODO# try other than TCX
+    msg = 'downloading activity: {0}, {1}, ended {2}, uploaded {3}, device {4}'
     print(msg.format(   activity['activityId'],
                         activity['activityName']['value'],
-                        activity['endTimestamp']['display']
+                        activity['endTimestamp']['display'],
+                        activity['uploadDate']['display'],
+                        activity['device']['display'],
                     ))
 
-    #TODO# actually download the TCX
     u = 'http://connect.garmin.com/proxy/download-service/export/{filetype}/activity/{id}?full=true'
-    #post=dict(full='true')
     q = urllib.request.Request(url=u.format(filetype=filetype, id=activity['activityId']))
-    filename = '/tmp/activity_{0}.{1}'.format(activity['activityId'],filetype)
-    try:
-        r = opener.open(q, timeout=500)
-    except urllib.error.HTTPError as e:
-        #TODO# come back and handle some of these...
-        raise e
-    with open(filename,'w') as f: f.write(r.read().decode('utf-8'))
+    filename = 'activity_{0}.{1}'.format(activity['activityId'],filetype)
+    filepath = os.path.join(path,filename)
+
+    if os.path.isfile(filepath):
+        print('{0} already exists, skipping'.format(filepath))
+        retry = 0
+    elif activity['device']['display'] == 'Unknown':
+        print('skipping download of manual entry')
+        retry = 0
+
+    while retry > 0:
+        try:
+            r = opener.open(q, timeout=500)
+            retry = 0
+            with open(filepath,'w') as f: f.write(r.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                print('received HTTP 404 -- will retry')
+                print(q.get_full_url())
+                time.sleep(7)
+                retry -= 1
+            elif e.code == 500 and filetype == 'tcx':
+                print('received HTTP 500 after attempting TCX download -- activity was probably uploaded as GPX')
+                retry = 0
+            elif e.code == 404 and filetype == 'fit': #TODO# handle separately from normal 404
+                print('received HTTP 404 after attempting FIT download -- activity was probably manually entered')
+                retry = 0
+            else:
+                raise e
 
 
 def set_timestamp_to_end(activity):
@@ -83,7 +111,8 @@ def add_chrome_user_agent(request):
 
 
 #def main(username, password, endtimestamp=False):
-def main(username, passcmd="", endtimestamp=False, filetype='tcx', retry=3):
+def main(username, passcmd="", endtimestamp=False, path = '/tmp',
+        filetype='tcx', retry=3, max_activities=-1, **kw):
     """
     Log in and download activities from Garmin Connect.
 
@@ -94,10 +123,12 @@ def main(username, passcmd="", endtimestamp=False, filetype='tcx', retry=3):
     else:
         password = getpass()
 
+    path = os.path.expanduser(path)
+    if not os.path.isdir(path): os.mkdir(path)
     opener = log_in(username, password)
 
     for activity in get_activity_list(opener): #TODO# optionally limited range
-        download(opener, activity, filetype, retry) #TODO# skip if already downloaded, check SHA
+        download(opener, activity, filetype, path, retry)
         if endtimestamp:
             set_timestamp_to_end(activity)
 
@@ -122,7 +153,8 @@ if __name__ == "__main__":
             help='command to get password for logging into Garmin Connect')
     parser.add_argument('-e','--endtimestamp', action='store_true', default=False,
             help='set downloaded file timestamps to activity end')
-
+    parser.add_argument('-p', '--path', type=str,
+            help='root path to download into')
 
     # actually parse the arguments
     args = parser.parse_args()
