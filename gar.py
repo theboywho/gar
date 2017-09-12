@@ -17,7 +17,6 @@ import time
 from datetime import datetime
 from getpass import getpass
 import subprocess # to handle password managers
-from sys import argv #TODO# is this really needed
 import urllib.request, urllib.error
 import json
 
@@ -115,13 +114,6 @@ def set_timestamp_to_end(activity):
     print('setting activity timestamp to end')
 
 
-#TODO# Remove this completely if it is not needed...
-def add_chrome_user_agent(request):
-    request.add_header('User-Agent','Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.76 Safari/537.36')
-    #TODO# confirm header is added without need to return
-
-
-#def main(username, password, endtimestamp=False):
 def main(username, passcmd="", endtimestamp=False, path = '/tmp',
         filetype='tcx', retry=3, max_activities=-1, **kw):
     """
@@ -157,9 +149,6 @@ if __name__ == "__main__":
             help='display version information and exit')
     parser.add_argument('username', type=str,
             help='username to use when logging into Garmin Connect')
-#    We should not encourage users to put their passwords in cleartext.
-#    parser.add_argument('-p','--password', type=str,
-#            help='password to use when logging into Garmin Connect')
     parser.add_argument('-P','--passcmd', type=str,
             help='command to get password for logging into Garmin Connect')
     parser.add_argument('-e','--endtimestamp', action='store_true', default=False,
