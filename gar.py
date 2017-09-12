@@ -49,13 +49,24 @@ def get_activity_list(opener):
     """
 
     """
-    u = 'http://connect.garmin.com/proxy/activity-search-service-1.0/json/activities?'
-    p = dict(start=0, limit=3) #TODO# confirm the POST data actually does something...
-    q = urllib.request.Request(url=u, data=urllib.parse.urlencode(p).encode('utf-8'))
-    # print(q.get_full_url() + q.data.decode('utf-8'))
+    start = 0
+    u = 'http://connect.garmin.com/proxy/activity-search-service-1.0/json/activities?start={0}'
+    q = urllib.request.Request(url=u.format(start))
     r = opener.open(q, timeout=100)
     j = json.loads(r.read())
-    return [entry['activity'] for entry in j['results']['activities']]
+    alist = [entry['activity'] for entry in j['results']['activities']]
+    max_activities = int(j['results']['search']['totalFound'])
+    #TODO# We'd rather just get the all the activity names at once...
+    start += 20
+    while start < max_activities:
+        q = urllib.request.Request(url=u.format(start))
+        print(q.get_full_url())
+        r = opener.open(q, timeout=100)
+        j = json.loads(r.read())
+        alist.extend([entry['activity'] for entry in j['results']['activities']])
+        start += 20
+    print('found {0} activities'.format(len(alist)))
+    return alist
 
 def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
     #TODO# try other than TCX
