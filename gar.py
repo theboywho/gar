@@ -12,6 +12,7 @@ references:
 """
 
 import logging
+import warnings
 import os # mkdir, remove, utime, path.isdir, path.isfile
 import time
 from datetime import datetime
@@ -20,15 +21,29 @@ import subprocess # to handle password managers
 import urllib.request, urllib.error
 import json
 
+ch = logging.StreamHandler()
+ch.setLevel(logging.WARNING) # adjust log level later with verbosity switch
+ch.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
+logging.captureWarnings(True)
+log = logging.getLogger('gar')
+log.setLevel(logging.DEBUG) # set the root logger level low
+log.addHandler(ch)
+
 def log_in(username, password):
     """
 
     """
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
+    log.debug('built URL opener with cookie processor')
+
+    log.debug('requesting single sign-on page from Garmin to establish session')
     q = urllib.request.Request('https://sso.garmin.com/sso/login')
     r = opener.open(q, timeout=100)
-    p = dict(username=username, password=password, embed='true')
+    log.debug('Garmin server response code: {}'.format(r.code))
 
+
+    log.debug('attempting to log in as {} and get valid session ticket'.format(username))
+    p = dict(username=username, password=password, embed='true')
     u = "https://sso.garmin.com/sso/login?service=https%3A%2F%2Fconnect.garmin.com%2Fmodern%2F&webhost=olaxpw-conctmodern000.garmin.com&source=https%3A%2F%2Fconnect.garmin.com%2Fen-US%2Fsignin&redirectAfterAccountLoginUrl=https%3A%2F%2Fconnect.garmin.com%2Fmodern%2F&redirectAfterAccountCreationUrl=https%3A%2F%2Fconnect.garmin.com%2Fmodern%2F&gauthHost=https%3A%2F%2Fsso.garmin.com%2Fsso&locale=en_US&id=gauth-widget&cssUrl=https%3A%2F%2Fstatic.garmincdn.com%2Fcom.garmin.connect%2Fui%2Fcss%2Fgauth-custom-v1.2-min.css&privacyStatementUrl=%2F%2Fconnect.garmin.com%2Fen-US%2Fprivacy%2F&clientId=GarminConnect&rememberMeShown=true&rememberMeChecked=false&createAccountShown=true&openCreateAccount=false&usernameShown=false&displayNameShown=false&consumeServiceTicket=false&initialFocus=true&embedWidget=false&generateExtraServiceTicket=false&globalOptInShown=true&globalOptInChecked=false&mobile=false&connectLegalTerms=true"
     #TODO# split the POST data out of the url^ so that this code is easier to read
 
@@ -41,6 +56,7 @@ def log_in(username, password):
     q = urllib.request.Request(url='https://connect.garmin.com/post-auth/login')
     r = opener.open(q, timeout=100)
 
+    log.debug('logged in as {}'.format(username))
     return opener
 
 
@@ -48,6 +64,7 @@ def get_activity_list(opener):
     """
 
     """
+    log.info('getting list of activities')
     start = 0
     u = 'http://connect.garmin.com/proxy/activity-search-service-1.0/json/activities?start={0}'
     q = urllib.request.Request(url=u.format(start))
@@ -59,18 +76,18 @@ def get_activity_list(opener):
     start += 20
     while start < max_activities:
         q = urllib.request.Request(url=u.format(start))
-        print(q.get_full_url())
+        log.debug('query: {}'.format(q.get_full_url()))
         r = opener.open(q, timeout=100)
         j = json.loads(r.read())
         alist.extend([entry['activity'] for entry in j['results']['activities']])
         start += 20
-    print('found {0} activities'.format(len(alist)))
+    log.info('found {0} activities'.format(len(alist)))
     return alist
 
 def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
     #TODO# try other than TCX
-    msg = 'downloading activity: {0}, {1}, ended {2}, uploaded {3}, device {4}'
-    print(msg.format(   activity['activityId'],
+    msg = 'checking activity: {0}, {1}, ended {2}, uploaded {3}, device {4}'
+    log.debug(msg.format(activity['activityId'],
                         activity['activityName']['value'],
                         activity['endTimestamp']['display'],
                         activity['uploadDate']['display'],
@@ -83,43 +100,62 @@ def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
     filepath = os.path.join(path,filename)
 
     if os.path.isfile(filepath):
-        print('{0} already exists, skipping'.format(filepath))
+        log.info('{0} already exists, skipping'.format(filepath))
         retry = 0
     elif activity['device']['display'] == 'Unknown':
-        print('skipping download of manual entry')
+        log.warn('activity {} appears to be manual entry, skipping'.format(activity['activityId']))
         retry = 0
 
     while retry > 0:
+        log.info('downloading activity {}: {}'.format(
+                activity['activityId'],
+                activity['activityName']['value']))
         try:
+            log.debug('query: {}'.format(q))
             r = opener.open(q, timeout=500)
             retry = 0
-            with open(filepath,'w') as f: f.write(r.read().decode('utf-8'))
+            with open(filepath,'w') as f:
+                f.write(r.read().decode('utf-8'))
+            log.debug('wrote {}'.format(filepath))
         except urllib.error.HTTPError as e:
             if e.code == 404:
-                print('received HTTP 404 -- will retry')
-                print(q.get_full_url())
+                log.warn('received HTTP 404 -- will retry')
+                log.debug(q.get_full_url())
                 time.sleep(7)
                 retry -= 1
             elif e.code == 500 and filetype == 'tcx':
-                print('received HTTP 500 after attempting TCX download -- activity was probably uploaded as GPX')
+                log.warn('received HTTP 500 after attempting TCX download -- activity was probably uploaded as GPX')
                 retry = 0
             elif e.code == 404 and filetype == 'fit': #TODO# handle separately from normal 404
-                print('received HTTP 404 after attempting FIT download -- activity was probably manually entered')
+                log.warn('received HTTP 404 after attempting FIT download -- activity was probably manually entered')
                 retry = 0
             else:
                 raise e
 
 
 def set_timestamp_to_end(activity):
-    print('setting activity timestamp to end')
+    log.info('setting activity timestamp to end')
+
+
+def test_log():
+    log.critical('test,')
+    log.error('test...')
+    # warnings.warn('one,')
+    log.warning('one,')
+    log.info('two,')
+    log.debug('3')
 
 
 def main(username, passcmd="", endtimestamp=False, path = '/tmp',
-        filetype='tcx', retry=3, max_activities=-1, **kw):
+        filetype='tcx', retry=3, max_activities=-1, verbosity=1, **kw):
     """
     Log in and download activities from Garmin Connect.
 
     """
+    for h in log.handlers:
+        if type(h) is logging.StreamHandler:
+            h.setLevel(logging.ERROR - 10*verbosity)
+    #test_log()
     if passcmd:
         p = subprocess.run(passcmd, shell=True, stdout=subprocess.PIPE)
         password = p.stdout.splitlines()[0].decode('utf-8')
@@ -140,15 +176,27 @@ def main(username, passcmd="", endtimestamp=False, path = '/tmp',
 if __name__ == "__main__":
     # use argparse to handle command-line arguments
     import argparse
+
+    # add a logging file if you are running from the command line
+    import logging.handlers
+    rfh = logging.handlers.RotatingFileHandler('gar.log', maxBytes=2**20, backupCount=3)
+    rfh.setLevel(logging.DEBUG)
+    fmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    rfh.setFormatter(fmt)
+    log.addHandler(rfh)
+
     # instatiate parser
     parser = argparse.ArgumentParser(
             description='Garmin Connect activity archiver',
+            prefix_chars='-'
             )
     parser.add_argument('-V', '--version', action='version',
             version='%(prog)s 0.0.1',
             help='display version information and exit')
     parser.add_argument('username', type=str,
             help='username to use when logging into Garmin Connect')
+    parser.add_argument('-v','--verbosity', action='count', default=1,
+            help='display verbose output')
     parser.add_argument('-P','--passcmd', type=str,
             help='command to get password for logging into Garmin Connect')
     parser.add_argument('-e','--endtimestamp', action='store_true', default=False,
