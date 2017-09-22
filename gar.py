@@ -137,13 +137,19 @@ def set_timestamp_to_end(activity):
     log.info('setting activity timestamp to end')
 
 
-def test_log():
-    log.critical('test,')
-    log.error('test...')
-    # warnings.warn('one,')
-    log.warning('one,')
-    log.info('two,')
-    log.debug('3')
+def set_verbosity(verbosity):
+    for h in log.handlers:
+        if type(h) is logging.StreamHandler:
+            h.setLevel(logging.ERROR - 10*verbosity)
+
+
+def add_rotating_file_handler(logfile = 'gar.log'):
+    import logging.handlers
+    rfh = logging.handlers.RotatingFileHandler(logfile, maxBytes=2**20, backupCount=3)
+    rfh.setLevel(logging.DEBUG)
+    fmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    rfh.setFormatter(fmt)
+    log.addHandler(rfh)
 
 
 def main(username, passcmd="", endtimestamp=False, path = '/tmp',
@@ -152,18 +158,20 @@ def main(username, passcmd="", endtimestamp=False, path = '/tmp',
     Log in and download activities from Garmin Connect.
 
     """
-    for h in log.handlers:
-        if type(h) is logging.StreamHandler:
-            h.setLevel(logging.ERROR - 10*verbosity)
-    #test_log()
+    set_verbosity(verbosity)
+
     if passcmd:
+        log.info('trying password as first line of output from: $ {}'.format(passcmd))
         p = subprocess.run(passcmd, shell=True, stdout=subprocess.PIPE)
         password = p.stdout.splitlines()[0].decode('utf-8')
     else:
         password = getpass()
 
     path = os.path.expanduser(path)
-    if not os.path.isdir(path): os.mkdir(path)
+    if not os.path.isdir(path):
+        log.debug('making target directory: {}'.format(path))
+        os.mkdir(path)
+
     opener = log_in(username, password)
 
     for activity in get_activity_list(opener): #TODO# optionally limited range
@@ -176,14 +184,6 @@ def main(username, passcmd="", endtimestamp=False, path = '/tmp',
 if __name__ == "__main__":
     # use argparse to handle command-line arguments
     import argparse
-
-    # add a logging file if you are running from the command line
-    import logging.handlers
-    rfh = logging.handlers.RotatingFileHandler('gar.log', maxBytes=2**20, backupCount=3)
-    rfh.setLevel(logging.DEBUG)
-    fmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    rfh.setFormatter(fmt)
-    log.addHandler(rfh)
 
     # instatiate parser
     parser = argparse.ArgumentParser(
@@ -206,5 +206,9 @@ if __name__ == "__main__":
 
     # actually parse the arguments
     args = parser.parse_args()
+
+    # add a logging file if you are running from the command line
+    add_rotating_file_handler()
+
     # call the main method to do something interesting
     main(**args.__dict__) #TODO more pythonic?
