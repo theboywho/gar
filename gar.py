@@ -60,7 +60,7 @@ def log_in(username, password):
     return opener
 
 
-def get_activity_list(opener):
+def get_activity_list(opener, max_activities=-1):
     """
 
     """
@@ -71,7 +71,11 @@ def get_activity_list(opener):
     r = opener.open(q, timeout=100)
     j = json.loads(r.read())
     alist = [entry['activity'] for entry in j['results']['activities']]
-    max_activities = int(j['results']['search']['totalFound'])
+
+    total_activities = int(j['results']['search']['totalFound'])
+    if max_activities < 0 or total_activities < max_activities:
+        max_activities = total_activities
+
     #TODO# We'd rather just get the all the activity names at once...
     start += 20
     while start < max_activities:
@@ -174,7 +178,7 @@ def main(username, passcmd="", endtimestamp=False, path = '/tmp',
 
     opener = log_in(username, password)
 
-    for activity in get_activity_list(opener): #TODO# optionally limited range
+    for activity in get_activity_list(opener, max_activities):
         download(opener, activity, filetype, path, retry)
         if endtimestamp:
             set_timestamp_to_end(activity)
@@ -197,11 +201,13 @@ if __name__ == "__main__":
             help='username to use when logging into Garmin Connect')
     parser.add_argument('-v','--verbosity', action='count', default=1,
             help='display verbose output')
+    parser.add_argument('-n','--max-activities', type=int, default=-1,
+            help='display verbose output')
     parser.add_argument('-P','--passcmd', type=str,
             help='command to get password for logging into Garmin Connect')
     parser.add_argument('-e','--endtimestamp', action='store_true', default=False,
             help='set downloaded file timestamps to activity end')
-    parser.add_argument('-p', '--path', type=str,
+    parser.add_argument('-p', '--path', type=str, default='./activities',
             help='root path to download into')
 
     # actually parse the arguments
