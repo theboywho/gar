@@ -68,7 +68,8 @@ def get_activity_list_page(opener, page=1, limit=100):
     q = urllib.request.Request(url=u.format(limit=limit, page=page))
     log.debug('query: {}'.format(q.get_full_url()))
     r = opener.open(q, timeout=100)
-    j = json.loads(r.read())
+    j = json.loads(r.read().decode('utf-8'))
+    #TODO# decode not needed in py3.6.2, but needed in py3.4.0
     activities = [entry['activity'] for entry in j['results']['activities']]
 
     total_pages = int(j['results']['search']['totalPages'])
@@ -90,7 +91,7 @@ def get_activity_list(opener, max_activities=-1):
         limit = max_activities
     activities, total_pages = get_activity_list_page(opener, page, limit)
 
-    while page < total_pages:
+    while page < total_pages and len(activities) < max_activities:
         page += 1
         a, _tp = get_activity_list_page(opener, page, limit)
         activities.extend(a)
@@ -125,7 +126,7 @@ def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
                 activity['activityId'],
                 activity['activityName']['value']))
         try:
-            log.debug('query: {}'.format(q))
+            log.debug('query: {}'.format(q.get_full_url()))
             r = opener.open(q, timeout=500)
             retry = 0
             with open(filepath,'w') as f:
@@ -134,7 +135,6 @@ def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 log.warn('received HTTP 404 -- will retry')
-                log.debug(q.get_full_url())
                 time.sleep(7)
                 retry -= 1
             elif e.code == 500 and filetype == 'tcx':
