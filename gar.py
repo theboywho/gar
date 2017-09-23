@@ -60,33 +60,43 @@ def log_in(username, password):
     return opener
 
 
+def get_activity_list_page(opener, page=1, limit=100):
+    """
+
+    """
+    u = 'http://connect.garmin.com/proxy/activity-search-service-1.0/json/activities?limit={limit}&currentPage={page}'
+    q = urllib.request.Request(url=u.format(limit=limit, page=page))
+    log.debug('query: {}'.format(q.get_full_url()))
+    r = opener.open(q, timeout=100)
+    j = json.loads(r.read())
+    activities = [entry['activity'] for entry in j['results']['activities']]
+
+    total_pages = int(j['results']['search']['totalPages'])
+    log.debug('retrieved page {0} of {1}'.format(page, total_pages))
+
+    return activities, total_pages
+
+
 def get_activity_list(opener, max_activities=-1):
     """
 
     """
     log.info('getting list of activities')
-    start = 0
-    u = 'http://connect.garmin.com/proxy/activity-search-service-1.0/json/activities?start={0}'
-    q = urllib.request.Request(url=u.format(start))
-    r = opener.open(q, timeout=100)
-    j = json.loads(r.read())
-    alist = [entry['activity'] for entry in j['results']['activities']]
 
-    total_activities = int(j['results']['search']['totalFound'])
-    if max_activities < 0 or total_activities < max_activities:
-        max_activities = total_activities
+    page = 1
+    if max_activities < 0 or max_activities > 100:
+        limit = 100
+    else: # 0 < max_activities < 100
+        limit = max_activities
+    activities, total_pages = get_activity_list_page(opener, page, limit)
 
-    #TODO# We'd rather just get the all the activity names at once...
-    start += 20
-    while start < max_activities:
-        q = urllib.request.Request(url=u.format(start))
-        log.debug('query: {}'.format(q.get_full_url()))
-        r = opener.open(q, timeout=100)
-        j = json.loads(r.read())
-        alist.extend([entry['activity'] for entry in j['results']['activities']])
-        start += 20
-    log.info('found {0} activities'.format(len(alist)))
-    return alist
+    while page < total_pages:
+        page += 1
+        a, _tp = get_activity_list_page(opener, page, limit)
+        activities.extend(a)
+
+    log.info('found {0} activities'.format(len(activities)))
+    return activities
 
 def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
     #TODO# try other than TCX
