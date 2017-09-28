@@ -149,7 +149,10 @@ def set_timestamp_to_end(activity, filetype='tcx', path='/tmp'):
     fp = os.path.join(path,fn)
     ets = activity['endTimestamp']
     log.info('setting {0} timestamp to {1}'.format(fp, ets['display']))
-    os.utime(fp, (datetime.now().timestamp(), int(ets['millis'])/1000))
+    try:
+        os.utime(fp, (datetime.now().timestamp(), int(ets['millis'])/1000))
+    except FileNotFoundError:
+        log.warn('could not find {0} to set timestamp, skipping'.format(fp))
 
 
 def set_verbosity(verbosity):
@@ -225,7 +228,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # add a logging file if you are running from the command line
-    add_rotating_file_handler()
+    add_rotating_file_handler(os.path.join(args.path, 'gar.log'))
 
     # call the main method to do something interesting
     main(**args.__dict__) #TODO more pythonic?
