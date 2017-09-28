@@ -3,9 +3,6 @@
 """
 main docstring...
 
-to-do:
-    - consider using [requests](http://docs.python-requests.org)
-
 references:
     - 
     - https://connect.garmin.com/proxy/activity-service-1.3/
@@ -147,8 +144,12 @@ def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
                 raise e
 
 
-def set_timestamp_to_end(activity):
-    log.info('setting activity timestamp to end')
+def set_timestamp_to_end(activity, filetype='tcx', path='/tmp'):
+    fn = 'activity_{0}.{1}'.format(activity['activityId'],filetype)
+    fp = os.path.join(path,fn)
+    ets = activity['endTimestamp']
+    log.info('setting {0} timestamp to {1}'.format(fp, ets['display']))
+    os.utime(fp, (datetime.now().timestamp(), int(ets['millis'])/1000))
 
 
 def set_verbosity(verbosity):
@@ -191,7 +192,7 @@ def main(username, passcmd="", endtimestamp=False, path = '/tmp',
     for activity in get_activity_list(opener, max_activities):
         download(opener, activity, filetype, path, retry)
         if endtimestamp:
-            set_timestamp_to_end(activity)
+            set_timestamp_to_end(activity, filetype, path)
 
 
 
