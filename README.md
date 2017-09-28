@@ -110,7 +110,7 @@ License
 [MIT](https://github.com/bluesquall/garmin-connect-export/blob/master/LICENSE) &copy; 2017 M J Stanway
 
 -------------
-[gar]: https://github.com/bluesquall/garmin-connect-export
+[gar]: https://github.com/bluesquall/gar
 [pass]: https://www.passwordstore.org
 [kjkjava]: https://github.com/kjkjava/
 [garmin-connect-export]: https://github.com/kjkjava/garmin-connect-export
