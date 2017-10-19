@@ -96,19 +96,21 @@ def get_activity_list(opener, max_activities=-1):
     log.info('found {0} activities'.format(len(activities)))
     return activities
 
-def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
+def download(opener, activity, ext='tcx', path='/tmp', retry=3):
     #TODO# try other than TCX
-    msg = 'checking activity: {0}, {1}, ended {2}, uploaded {3}, device {4}'
+    msg = 'checking activity: {0}, {5}, {1}, ended {2}, uploaded {3}, device {4}'
     log.debug(msg.format(activity['activityId'],
                         activity['activityName']['value'],
                         activity['endTimestamp']['display'],
                         activity['uploadDate']['display'],
                         activity['device']['display'],
+                        ext
                     ))
 
-    u = 'http://connect.garmin.com/proxy/download-service/export/{filetype}/activity/{id}?full=true'
-    q = urllib.request.Request(url=u.format(filetype=filetype, id=activity['activityId']))
-    filename = 'activity_{0}.{1}'.format(activity['activityId'],filetype)
+    sub = dict(tcx = 'export/tcx', fit = 'files')
+    u = 'https://connect.garmin.com/modern/proxy/download-service/{sub}/activity/{id}'
+    q = urllib.request.Request(url=u.format(sub=sub[ext], id=activity['activityId']))
+    filename = 'activity_{0}.{1}'.format(activity['activityId'],ext)
     filepath = os.path.join(path,filename)
 
     if os.path.isfile(filepath):
@@ -126,26 +128,30 @@ def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
             log.debug('query: {}'.format(q.get_full_url()))
             r = opener.open(q, timeout=500)
             retry = 0
-            with open(filepath,'w') as f:
-                f.write(r.read().decode('utf-8'))
+            if ext == "tcx":
+                with open(filepath,'wt') as f:
+                    f.write(r.read().decode('utf-8'))
+            else: # ext == "fit":
+                with open(filepath,'wb') as f:
+                    f.write(r.read())
             log.debug('wrote {}'.format(filepath))
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 log.warn('received HTTP 404 -- will retry')
                 time.sleep(7)
                 retry -= 1
-            elif e.code == 500 and filetype == 'tcx':
+            elif e.code == 500 and ext == 'tcx':
                 log.warn('received HTTP 500 after attempting TCX download -- activity was probably uploaded as GPX')
                 retry = 0
-            elif e.code == 404 and filetype == 'fit': #TODO# handle separately from normal 404
+            elif e.code == 404 and ext == 'fit': #TODO# handle separately from normal 404
                 log.warn('received HTTP 404 after attempting FIT download -- activity was probably manually entered')
                 retry = 0
             else:
                 raise e
 
 
-def set_timestamp_to_end(activity, filetype='tcx', path='/tmp'):
-    fn = 'activity_{0}.{1}'.format(activity['activityId'],filetype)
+def set_timestamp_to_end(activity, ext='tcx', path='/tmp'):
+    fn = 'activity_{0}.{1}'.format(activity['activityId'],ext)
     fp = os.path.join(path,fn)
     ets = activity['endTimestamp']
     log.info('setting {0} timestamp to {1}'.format(fp, ets['display']))
@@ -171,7 +177,7 @@ def add_rotating_file_handler(logfile = 'gar.log'):
 
 
 def main(username, passcmd="", endtimestamp=False, path = '/tmp',
-        filetype='tcx', retry=3, max_activities=-1, verbosity=1, **kw):
+        ext='tcx', retry=3, max_activities=-1, verbosity=1, **kw):
     """
     Log in and download activities from Garmin Connect.
 
@@ -193,9 +199,9 @@ def main(username, passcmd="", endtimestamp=False, path = '/tmp',
     opener = log_in(username, password)
 
     for activity in get_activity_list(opener, max_activities):
-        download(opener, activity, filetype, path, retry)
+        download(opener, activity, ext, path, retry)
         if endtimestamp:
-            set_timestamp_to_end(activity, filetype, path)
+            set_timestamp_to_end(activity, ext, path)
 
 
 
@@ -223,6 +229,9 @@ if __name__ == "__main__":
             help='set downloaded file timestamps to activity end')
     parser.add_argument('-p', '--path', type=str, default='./activities',
             help='root path to download into')
+    parser.add_argument('-f', '--ext', type=str, default='tcx',
+            help='tcx or fit')
+    #TODO optional flags for both TCX and FIT
 
     # actually parse the arguments
     args = parser.parse_args()
