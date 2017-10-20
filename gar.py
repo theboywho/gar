@@ -17,6 +17,8 @@ from getpass import getpass
 import subprocess # to handle password managers
 import urllib.request, urllib.error
 import json
+import io
+import zipfile
 
 ch = logging.StreamHandler()
 ch.setLevel(logging.WARNING) # adjust log level later with verbosity switch
@@ -96,8 +98,8 @@ def get_activity_list(opener, max_activities=-1):
     log.info('found {0} activities'.format(len(activities)))
     return activities
 
+
 def download(opener, activity, ext='tcx', path='/tmp', retry=3):
-    #TODO# try other than TCX
     msg = 'checking activity: {0}, {5}, {1}, ended {2}, uploaded {3}, device {4}'
     log.debug(msg.format(activity['activityId'],
                         activity['activityName']['value'],
@@ -132,8 +134,17 @@ def download(opener, activity, ext='tcx', path='/tmp', retry=3):
                 with open(filepath,'wt') as f:
                     f.write(r.read().decode('utf-8'))
             else: # ext == "fit":
-                with open(filepath,'wb') as f:
-                    f.write(r.read())
+                afn = '{}.fit'.format(activity['activityId'])
+                zf = zipfile.ZipFile(io.BytesIO(r.read()))
+                try:
+                    info = zf.getinfo(afn)
+                except KeyError:
+                    log.warn('did not find {} in zip archive'.format(afn))
+                    retry = 0
+                else:
+                    log.info('unzipped {x.filename} is {x.file_size} bytes, last modified {x.date_time}'.format(x=info))
+                    with open(filepath,'wb') as f:
+                        f.write(zf.read(afn))
             log.debug('wrote {}'.format(filepath))
         except urllib.error.HTTPError as e:
             if e.code == 404:
@@ -176,8 +187,8 @@ def add_rotating_file_handler(logfile = 'gar.log'):
     log.addHandler(rfh)
 
 
-def main(username, passcmd="", endtimestamp=False, path = '/tmp',
-        ext='tcx', retry=3, max_activities=-1, verbosity=1, **kw):
+def main(username, passcmd="", endtimestamp=True, path = '/tmp',
+        tcx=False, fit=False, retry=3, max_activities=-1, verbosity=1, **kw):
     """
     Log in and download activities from Garmin Connect.
 
@@ -199,9 +210,15 @@ def main(username, passcmd="", endtimestamp=False, path = '/tmp',
     opener = log_in(username, password)
 
     for activity in get_activity_list(opener, max_activities):
-        download(opener, activity, ext, path, retry)
+        if fit:
+            download(opener, activity, 'fit', path, retry)
+        if tcx:
+            download(opener, activity, 'tcx', path, retry)
         if endtimestamp:
-            set_timestamp_to_end(activity, ext, path)
+            if tcx:
+                set_timestamp_to_end(activity, 'tcx', path)
+            if fit:
+                set_timestamp_to_end(activity, 'fit', path)
 
 
 
@@ -225,13 +242,14 @@ if __name__ == "__main__":
             help='display verbose output')
     parser.add_argument('-P','--passcmd', type=str,
             help='command to get password for logging into Garmin Connect')
-    parser.add_argument('-e','--endtimestamp', action='store_true', default=False,
+    parser.add_argument('-e','--endtimestamp', action='store_true', default=True,
             help='set downloaded file timestamps to activity end')
     parser.add_argument('-p', '--path', type=str, default='./activities',
             help='root path to download into')
-    parser.add_argument('-f', '--ext', type=str, default='tcx',
-            help='tcx or fit')
-    #TODO optional flags for both TCX and FIT
+    parser.add_argument('-t', '--tcx', action='store_true', default=False,
+            help='download exported .tcx files')
+    parser.add_argument('-f', '--fit', action='store_true', default=False,
+            help='download (original) .fit files')
 
     # actually parse the arguments
     args = parser.parse_args()
