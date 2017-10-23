@@ -96,8 +96,8 @@ def get_activity_list(opener, max_activities=-1):
     log.info('found {0} activities'.format(len(activities)))
     return activities
 
-def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
-    #TODO# try other than TCX
+def download(opener, activity, filetype, path='/tmp', retry=3):
+    #TODO# try other than
     msg = 'checking activity: {0}, {1}, ended {2}, uploaded {3}, device {4}'
     log.debug(msg.format(activity['activityId'],
                         activity['activityName']['value'],
@@ -106,7 +106,7 @@ def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
                         activity['device']['display'],
                     ))
 
-    u = 'http://connect.garmin.com/proxy/download-service/export/{filetype}/activity/{id}?full=true'
+    u = 'http://connect.garmin.com/proxy/download-service/files/activity/{id}'
     q = urllib.request.Request(url=u.format(filetype=filetype, id=activity['activityId']))
     filename = 'activity_{0}.{1}'.format(activity['activityId'],filetype)
     filepath = os.path.join(path,filename)
@@ -126,8 +126,8 @@ def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
             log.debug('query: {}'.format(q.get_full_url()))
             r = opener.open(q, timeout=500)
             retry = 0
-            with open(filepath,'w') as f:
-                f.write(r.read().decode('utf-8'))
+            with open(filepath,'wb') as f:
+                f.write(r.read())
             log.debug('wrote {}'.format(filepath))
         except urllib.error.HTTPError as e:
             if e.code == 404:
@@ -144,7 +144,7 @@ def download(opener, activity, filetype='tcx', path='/tmp', retry=3):
                 raise e
 
 
-def set_timestamp_to_end(activity, filetype='tcx', path='/tmp'):
+def set_timestamp_to_end(activity, filetype, path='/tmp'):
     fn = 'activity_{0}.{1}'.format(activity['activityId'],filetype)
     fp = os.path.join(path,fn)
     ets = activity['endTimestamp']
@@ -171,7 +171,7 @@ def add_rotating_file_handler(logfile = 'gar.log'):
 
 
 def main(username, passcmd="", endtimestamp=False, path = '/tmp',
-        filetype='tcx', retry=3, max_activities=-1, verbosity=1, **kw):
+        filetype='zip', retry=3, max_activities=-1, verbosity=1, **kw):
     """
     Log in and download activities from Garmin Connect.
 
